@@ -484,6 +484,31 @@
     </div>
   </div>
 
+
+  <!-- Anonymous Research Data Consent Modal -->
+  <div id="researchConsentModal" class="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <h2 class="text-xl font-black text-amber-300">使用者資料蒐集說明</h2>
+      <div class="text-sm text-slate-300 leading-7 space-y-3">
+        <p>歡迎使用「句子拉霸口說大挑戰」。為了解本學習工具的實際使用情形，並作為課程改進與教學研究之參考，本系統將以匿名方式記錄部分使用資料。</p>
+        <p><strong class="text-slate-100">可能記錄：</strong>匿名使用者識別碼、使用日期與時間、使用階段（session）、練習次數、每次練習完成時間、提示功能使用情形、示範發音功能使用次數、語音辨識功能使用情形，以及每次練習的評分結果。</p>
+        <p><strong class="text-slate-100">本研究紀錄不蒐集：</strong>姓名、學號、電子郵件、錄音內容或完整語音辨識文字。本研究系統亦不主動蒐集 IP 位址作為研究資料。</p>
+        <p>所蒐集資料將用於了解學習工具使用情形、改善課程與教學設計；如作為教學研究資料使用，將以匿名及整體統計方式進行分析與呈現。</p>
+        <p>您可以不同意研究資料蒐集，仍可正常使用本學習工具；不同意時，本程式不會將研究事件傳送至研究資料庫。</p>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-3 pt-2">
+        <button id="consentAcceptBtn" class="flex-1 px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl">我了解並同意開始使用</button>
+        <button id="consentDeclineBtn" class="flex-1 px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700">不同意資料蒐集，仍繼續使用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Research data collection settings -->
+  <footer class="max-w-6xl mx-auto px-4 pt-8 pb-2 text-center">
+    <button id="researchSettingsBtn" class="text-xs text-slate-400 hover:text-amber-300 underline underline-offset-4">研究資料蒐集設定</button>
+    <span id="researchConsentStatus" class="ml-2 text-xs text-slate-500"></span>
+  </footer>
+
   <!-- Toast / Message Modal Overlay (Replaces alert/confirm) -->
   <div id="toastBox" class="hidden fixed bottom-6 right-6 z-50 bg-slate-800 border border-amber-500/50 text-slate-100 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 transition-all">
     <i id="toastIcon" class="fa-solid fa-circle-info text-amber-400 text-lg"></i>
@@ -502,7 +527,121 @@
     </div>
   </div>
 
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBegbF1xGZzr3l89rhpUQ3Mt-SBk9A4BWM",
+      authDomain: "speaking-practice2.firebaseapp.com",
+      projectId: "speaking-practice2",
+      storageBucket: "speaking-practice2.firebasestorage.app",
+      messagingSenderId: "296798925937",
+      appId: "1:296798925937:web:f5fe31f43a731d040297d0",
+      measurementId: "G-ZEVQ6ZEP0Q"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.firebaseResearchReady = (async () => {
+      if (!auth.currentUser) await signInAnonymously(auth);
+      return auth.currentUser;
+    })();
+
+    window.saveResearchEventToFirebase = async (event) => {
+      const user = await window.firebaseResearchReady;
+      const payload = {
+        ...event,
+        anonymous_id: user.uid,
+        client_timestamp: event.timestamp,
+        timestamp: serverTimestamp()
+      };
+      await addDoc(collection(db, "events"), payload);
+      return user.uid;
+    };
+  </script>
+
   <script>
+
+    // ===== Anonymous research event tracking =====
+    const RESEARCH_COLLECTION = 'events';
+    let researchConsent = localStorage.getItem('research_consent');
+    let anonymousUserId = localStorage.getItem('research_anonymous_id') || null;
+    const sessionId = 'S-' + crypto.randomUUID();
+    let roundNumber = 0, roundTtsCount = 0, roundRecordingUsed = false, roundAttempt = 0;
+
+    function updateResearchConsentStatus() {
+      const el = document.getElementById('researchConsentStatus');
+      if (!el) return;
+      el.textContent = researchConsent === 'accepted' ? '目前：已同意蒐集' : researchConsent === 'declined' ? '目前：未同意蒐集' : '目前：尚未選擇';
+    }
+
+    async function queueResearchEvent(eventName, details = {}) {
+      if (researchConsent !== 'accepted') return;
+      const event = {
+        anonymous_id: anonymousUserId, session_id: sessionId, event: eventName,
+        timestamp: new Date().toISOString(), round: roundNumber, ...details
+      };
+      try {
+        if (!window.saveResearchEventToFirebase) throw new Error('Firebase 尚未完成初始化');
+        const uid = await window.saveResearchEventToFirebase(event);
+        anonymousUserId = uid;
+        localStorage.setItem('research_anonymous_id', uid);
+      } catch (err) {
+        console.warn('研究事件暫存於本機，稍後可重試：', err);
+        const queue = JSON.parse(localStorage.getItem('research_event_queue') || '[]');
+        queue.push(event);
+        localStorage.setItem('research_event_queue', JSON.stringify(queue));
+      }
+    }
+
+    async function flushResearchQueue() {
+      if (researchConsent !== 'accepted' || !window.saveResearchEventToFirebase) return;
+      const queue = JSON.parse(localStorage.getItem('research_event_queue') || '[]');
+      if (!queue.length) return;
+      const remaining = [];
+      for (const event of queue) {
+        try {
+          const uid = await window.saveResearchEventToFirebase(event);
+          anonymousUserId = uid;
+          localStorage.setItem('research_anonymous_id', uid);
+        } catch (err) { remaining.push(event); }
+      }
+      localStorage.setItem('research_event_queue', JSON.stringify(remaining));
+    }
+
+    function initResearchConsent() {
+      const modal = document.getElementById('researchConsentModal');
+      if (researchConsent) modal.classList.add('hidden');
+      updateResearchConsentStatus();
+
+      document.getElementById('consentAcceptBtn').addEventListener('click', async () => {
+        researchConsent = 'accepted';
+        localStorage.setItem('research_consent', researchConsent);
+        modal.classList.add('hidden');
+        updateResearchConsentStatus();
+        await flushResearchQueue();
+        queueResearchEvent('consent_given');
+        queueResearchEvent('session_start');
+      });
+      document.getElementById('consentDeclineBtn').addEventListener('click', () => {
+        researchConsent = 'declined';
+        localStorage.setItem('research_consent', researchConsent);
+        localStorage.removeItem('research_event_queue');
+        modal.classList.add('hidden');
+        updateResearchConsentStatus();
+      });
+      document.getElementById('researchSettingsBtn').addEventListener('click', () => {
+        modal.classList.remove('hidden');
+      });
+      if (researchConsent === 'accepted') {
+        flushResearchQueue().then(() => queueResearchEvent('session_start'));
+      }
+    }
+
     // Default Slot Options
     const DEFAULT_REEL_DATA = [
       // 0: 約誰？
@@ -673,12 +812,15 @@
         showToast('請先拉霸產生目標句子！');
         return;
       }
+      roundTtsCount++; queueResearchEvent('tts_play', {tts_count: roundTtsCount});
       speakWord(targetSentence);
     }
 
     // Spin Machine Execution
     function spinSlots() {
       if (isSpinning) return;
+      roundNumber++; roundTtsCount = 0; roundRecordingUsed = false; roundAttempt = 0;
+      queueResearchEvent('spin');
       isSpinning = true;
       spinBtn.disabled = true;
       spinBtn.classList.add('opacity-50');
@@ -762,6 +904,7 @@
 
     function toggleHint() {
       if (!targetSentence) return;
+      if (!hintRevealed) queueResearchEvent('hint_view');
       hintRevealed = !hintRevealed;
       if (hintRevealed) {
         hintBtn.innerHTML = `<i class="fa-solid fa-eye-slash"></i> 隱藏參考句型`;
@@ -850,6 +993,7 @@
       if (isRecording) {
         recognition.stop();
       } else {
+        roundRecordingUsed = true; queueResearchEvent('recording_start');
         recognition.start();
       }
     }
@@ -903,6 +1047,8 @@
       // Evaluate accuracy
       const evalResult = evaluateSentence(userText, targetSentence, currentSelected);
       const score = evalResult.score;
+      roundAttempt++;
+      queueResearchEvent('answer_submit', { score, completion_time: singleTurnSeconds, hint_used: hintRevealed, tts_count: roundTtsCount, recording_used: roundRecordingUsed, attempt: roundAttempt, matched_count: evalResult.matched.length, missing_count: evalResult.missing.length });
 
       // Update Statistics State
       stats.totalPlays++;
@@ -1031,6 +1177,7 @@
 
     // Event Listeners Initialization
     window.onload = () => {
+      initResearchConsent();
       initReels();
       renderStats();
 
