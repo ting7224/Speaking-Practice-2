@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>句子拉霸口說大挑戰 - Slot Machine Speaking Challenge</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Canvas Confetti for High Score Celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fff5f5',
+              100: '#fed7d7',
+              500: '#f56565',
+              600: '#e53e3e',
+              700: '#c53030',
+            },
+            slot: {
+              gold: '#fbbf24',
+              purple: '#6d28d9',
+              dark: '#1e1b4b',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;800;900&display=swap');
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+      min-height: 100vh;
+      color: #f8fafc;
+    }
+
+    /* Slot Machine Reel Container */
+    .reel-window {
+      height: 120px;
+      overflow: hidden;
+      position: relative;
+      border-radius: 0.75rem;
+      box-shadow: inset 0 6px 12px rgba(0,0,0,0.8), 0 0 15px rgba(255, 255, 255, 0.1);
+      background: linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(30,27,75,0.85) 50%, rgba(15,23,42,0.95) 100%);
+    }
+
+    /* Reel Overlay gradient for 3D curved cylinder effect */
+    .reel-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      background: linear-gradient(
+        180deg, 
+        rgba(15, 23, 42, 0.95) 0%, 
+        rgba(0, 0, 0, 0) 25%, 
+        rgba(0, 0, 0, 0) 75%, 
+        rgba(15, 23, 42, 0.95) 100%
+      );
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 0.75rem;
+      z-index: 10;
+    }
+
+    .reel-strip {
+      transition: transform 0.1s linear;
+      will-change: transform;
+    }
+
+    .reel-item {
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 0.5rem;
+      font-weight: 800;
+      text-align: center;
+      user-select: none;
+      word-break: break-all;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s, transform 0.15s ease;
+    }
+
+    .reel-item:hover {
+      background-color: rgba(251, 191, 36, 0.2);
+      color: #fef08a;
+    }
+
+    /* Slot Machine Lever Styling */
+    .lever-container {
+      position: relative;
+      width: 40px;
+      height: 180px;
+    }
+
+    .lever-base {
+      width: 30px;
+      height: 80px;
+      background: linear-gradient(90deg, #475569, #94a3b8, #334155);
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .lever-stick {
+      width: 12px;
+      height: 120px;
+      background: linear-gradient(90deg, #cbd5e1, #ffffff, #64748b);
+      position: absolute;
+      bottom: 40px;
+      left: 9px;
+      transform-origin: bottom center;
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border-radius: 6px;
+    }
+
+    .lever-ball {
+      width: 36px;
+      height: 36px;
+      background: radial-gradient(circle at 30% 30%, #ef4444, #991b1b);
+      border-radius: 50%;
+      position: absolute;
+      top: -18px;
+      left: -12px;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+      cursor: pointer;
+    }
+
+    .lever-pulled .lever-stick {
+      transform: rotateX(150deg) scaleY(0.8);
+    }
+
+    /* Pulsing mic indicator */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .recording-ring {
+      animation: pulse-ring 1.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="pb-12">
+
+  <!-- Top Header Navigation -->
+  <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-red-500 flex items-center justify-center text-slate-900 text-xl font-black shadow-lg shadow-amber-500/20">
+          <i class="fa-solid fa-dice font-bold"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-black bg-gradient-to-r from-amber-300 via-orange-400 to-red-400 bg-clip-text text-transparent">
+            句子拉霸口說大挑戰
+          </h1>
+          <p class="text-xs text-slate-400">Spin, Speak & Practice Mandarin Sentences!</p>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button id="customOptionsBtn" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-sliders"></i> 自訂拉霸選項
+        </button>
+        <button id="soundToggleBtn" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-volume-high" id="soundIcon"></i> 音效
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 pt-6 space-y-6">
+
+    <!-- Statistics Dashboard Grid -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <!-- Stat 1: Total Usage Count -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center gap-3 relative overflow-hidden group hover:border-indigo-500/50 transition">
+        <div class="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-gamepad"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 font-medium">總使用次數</p>
+          <p id="statTotalPlays" class="text-2xl font-black text-slate-100">0 <span class="text-xs font-normal text-slate-400">次</span></p>
+        </div>
+        <div class="absolute -right-2 -bottom-2 text-indigo-500/5 text-5xl group-hover:scale-110 transition">
+          <i class="fa-solid fa-gamepad"></i>
+        </div>
+      </div>
+
+      <!-- Stat 2: >90% High Accuracy Count -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center gap-3 relative overflow-hidden group hover:border-emerald-500/50 transition">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 font-medium">正確率 >90% 次數</p>
+          <p id="statHighAccuracyCount" class="text-2xl font-black text-emerald-400">0 <span class="text-xs font-normal text-slate-400">次</span></p>
+        </div>
+        <div class="absolute -right-2 -bottom-2 text-emerald-500/5 text-5xl group-hover:scale-110 transition">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+      </div>
+
+      <!-- Stat 3: Total Usage Time -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center gap-3 relative overflow-hidden group hover:border-amber-500/50 transition">
+        <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-stopwatch"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 font-medium">總累積使用時間</p>
+          <p id="statTotalTime" class="text-2xl font-black text-amber-300">00:00</p>
+        </div>
+        <div class="absolute -right-2 -bottom-2 text-amber-500/5 text-5xl group-hover:scale-110 transition">
+          <i class="fa-solid fa-stopwatch"></i>
+        </div>
+      </div>
+
+      <!-- Stat 4: Single Round Completion Time -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center gap-3 relative overflow-hidden group hover:border-sky-500/50 transition">
+        <div class="w-12 h-12 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 font-medium">單次完成時間</p>
+          <p id="statSingleTime" class="text-2xl font-black text-sky-300">-- <span class="text-xs font-normal text-slate-400">秒</span></p>
+        </div>
+        <div class="absolute -right-2 -bottom-2 text-sky-500/5 text-5xl group-hover:scale-110 transition">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slot Machine Main Arcade Frame -->
+    <section class="bg-slate-900 border-2 border-amber-500/40 rounded-3xl p-4 md:p-6 shadow-2xl shadow-indigo-950/50 relative overflow-hidden">
+      <!-- Decorative Lights Top Bar -->
+      <div class="flex items-center justify-between mb-4 px-2">
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+          <span class="w-3 h-3 rounded-full bg-amber-400"></span>
+          <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+        </div>
+        <div class="text-center font-black tracking-wider text-xs md:text-sm text-amber-400 uppercase bg-amber-500/10 px-4 py-1 rounded-full border border-amber-500/30">
+          ✨ 五連滾動拉霸轉盤 (點擊選項可聆聽發音) ✨
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+          <span class="w-3 h-3 rounded-full bg-amber-400"></span>
+          <span class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+        </div>
+      </div>
+
+      <!-- Reels Container Grid -->
+      <div class="flex items-center gap-2 md:gap-3">
+        <div class="grid grid-cols-5 gap-1.5 md:gap-3 flex-1">
+          
+          <!-- Reel 1: WHO (約誰？) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="text-center text-xs font-bold text-amber-300 bg-slate-800 py-1 rounded-md border border-slate-700">
+              <i class="fa-solid fa-user text-red-400"></i> 約誰？
+            </div>
+            <div class="reel-window">
+              <div class="reel-overlay"></div>
+              <div id="reel-0" class="reel-strip"></div>
+            </div>
+          </div>
+
+          <!-- Reel 2: WHICH DAY (哪一天？) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="text-center text-xs font-bold text-amber-300 bg-slate-800 py-1 rounded-md border border-slate-700">
+              <i class="fa-solid fa-calendar-day text-orange-400"></i> 哪一天？
+            </div>
+            <div class="reel-window">
+              <div class="reel-overlay"></div>
+              <div id="reel-1" class="reel-strip"></div>
+            </div>
+          </div>
+
+          <!-- Reel 3: WHAT TIME (幾點？) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="text-center text-xs font-bold text-amber-300 bg-slate-800 py-1 rounded-md border border-slate-700">
+              <i class="fa-solid fa-clock text-yellow-400"></i> 幾點？
+            </div>
+            <div class="reel-window">
+              <div class="reel-overlay"></div>
+              <div id="reel-2" class="reel-strip"></div>
+            </div>
+          </div>
+
+          <!-- Reel 4: WHERE (在哪裡見？) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="text-center text-xs font-bold text-amber-300 bg-slate-800 py-1 rounded-md border border-slate-700">
+              <i class="fa-solid fa-location-dot text-emerald-400"></i> 在哪裡見？
+            </div>
+            <div class="reel-window">
+              <div class="reel-overlay"></div>
+              <div id="reel-3" class="reel-strip"></div>
+            </div>
+          </div>
+
+          <!-- Reel 5: WHAT TO DO (要做什麼？) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="text-center text-xs font-bold text-amber-300 bg-slate-800 py-1 rounded-md border border-slate-700">
+              <i class="fa-solid fa-person-running text-sky-400"></i> 要做什麼？
+            </div>
+            <div class="reel-window">
+              <div class="reel-overlay"></div>
+              <div id="reel-4" class="reel-strip"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Side Interactive Lever -->
+        <div class="hidden sm:flex flex-col items-center justify-center pl-2">
+          <div id="leverContainer" class="lever-container flex justify-center items-center cursor-pointer group" title="點擊拉下拉桿！">
+            <div class="lever-base"></div>
+            <div class="lever-stick">
+              <div class="lever-ball group-hover:scale-110 transition"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spin Control Button -->
+      <div class="mt-6 flex flex-wrap items-center justify-center gap-4">
+        <button id="spinBtn" class="w-full sm:w-auto px-10 py-4 bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 hover:from-amber-400 hover:to-red-500 text-slate-950 font-black text-xl rounded-2xl shadow-xl shadow-orange-600/30 transform active:scale-95 transition flex items-center justify-center gap-3 border-2 border-amber-300">
+          <i class="fa-solid fa-rotate text-2xl animate-spin-slow"></i> 啟動拉霸抽籤 (SPIN)
+        </button>
+      </div>
+    </section>
+
+    <!-- Target Sentence & Voice Speaking Challenge Panel -->
+    <section id="challengeSection" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-3 h-3 rounded-full bg-sky-400"></div>
+          <h2 class="text-lg font-bold text-slate-100">🗣️ 口說挑戰目標句</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <!-- Hint Toggle Button -->
+          <button id="hintBtn" disabled class="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 opacity-50 cursor-not-allowed">
+            <i class="fa-solid fa-lightbulb"></i> 顯示句子提示
+          </button>
+          <button id="readSentenceBtn" class="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-bold transition flex items-center gap-2">
+            <i class="fa-solid fa-volume-high"></i> 示範發音 (TTS)
+          </button>
+        </div>
+      </div>
+
+      <!-- Generated Sentence Target Box -->
+      <div class="bg-slate-950/80 border border-amber-500/30 rounded-2xl p-5 text-center relative overflow-hidden">
+        <p class="text-xs text-slate-400 mb-2">請依據拉霸出的 5 個要素，自由組合並唸出句子（語序彈性，順序可自由發揮）：</p>
+        
+        <!-- Key elements badges -->
+        <div id="elementsBadgeContainer" class="flex flex-wrap items-center justify-center gap-2 mb-4">
+          <span class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400">請先點擊上方按鈕拉霸抽籤...</span>
+        </div>
+
+        <!-- Target Standard Sentence Display (Hidden by default, revealed via Hint button) -->
+        <div id="targetSentenceDisplay" class="text-xl md:text-2xl font-black text-amber-300 tracking-wide min-h-[36px] flex items-center justify-center">
+          👉 點擊「啟動拉霸抽籤」開始題目！
+        </div>
+      </div>
+
+      <!-- Speech Recording & Input Section -->
+      <div class="flex flex-col items-center justify-center space-y-4 pt-2">
+        <div class="relative flex items-center justify-center">
+          <!-- Animated backdrop ring during recording -->
+          <div id="recordingRing" class="hidden absolute w-28 h-28 rounded-full bg-red-500/30 recording-ring"></div>
+          
+          <!-- Microphone Button -->
+          <button id="micBtn" disabled class="w-20 h-20 rounded-full bg-slate-800 text-slate-500 border-4 border-slate-700 flex flex-col items-center justify-center gap-1 shadow-lg transition-all duration-300 cursor-not-allowed z-10">
+            <i class="fa-solid fa-microphone text-2xl"></i>
+            <span class="text-[10px] font-bold">按住/點擊說話</span>
+          </button>
+        </div>
+
+        <!-- Status Message -->
+        <p id="speechStatus" class="text-xs font-medium text-slate-400 text-center">
+          準備就緒後，請點選麥克風圖示開始錄音。
+        </p>
+
+        <!-- Live Recognized Text Input Box -->
+        <div class="w-full max-w-2xl bg-slate-950 border border-slate-800 rounded-xl p-3">
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+            <span>辨識結果 (可手動修改)：</span>
+            <button id="clearTextBtn" class="hover:text-amber-400"><i class="fa-solid fa-trash-can"></i> 清除</button>
+          </div>
+          <textarea id="userInputText" rows="2" placeholder="語音辨識內容會顯示在此處..." class="w-full bg-transparent text-slate-100 font-medium border-0 focus:ring-0 resize-none text-base outline-none"></textarea>
+        </div>
+
+        <!-- Submit Verification Button -->
+        <button id="submitAnswerBtn" disabled class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-black text-base rounded-xl transition shadow-lg shadow-emerald-950/50 flex items-center gap-2">
+          <i class="fa-solid fa-paper-plane"></i> 送出並評分
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Verification Result Feedback Modal / Card -->
+    <section id="resultCard" class="hidden bg-slate-900 border-2 border-slate-700 rounded-3xl p-6 shadow-2xl space-y-4 animate-fade-in">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-chart-pie text-amber-400"></i> 句型精準度評分回饋
+        </h3>
+        <span id="scoreBadge" class="text-2xl font-black px-4 py-1 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30">
+          0%
+        </span>
+      </div>
+
+      <!-- Score Bar -->
+      <div class="w-full bg-slate-950 rounded-full h-4 overflow-hidden border border-slate-800">
+        <div id="scoreBarInner" class="bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400 h-full w-0 transition-all duration-1000"></div>
+      </div>
+
+      <!-- Diagnostic Evaluation Content -->
+      <div id="feedbackDetail" class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3 text-sm">
+        <!-- JS dynamically fills feedback comparison here -->
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button id="nextRoundBtn" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl transition flex items-center gap-2">
+          下一關 / 再次拉霸 <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Custom Options Modal -->
+  <div id="customModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-amber-300 flex items-center gap-2">
+          <i class="fa-solid fa-sliders"></i> 自訂五大項目選項 (用換行分隔)
+        </h3>
+        <button id="closeModalBtn" class="text-slate-400 hover:text-slate-100 text-xl"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-red-400 mb-1">1. 約誰？ (Who)</label>
+          <textarea id="optWho" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 outline-none focus:border-amber-500"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-orange-400 mb-1">2. 哪一天？ (Which Day)</label>
+          <textarea id="optDay" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 outline-none focus:border-amber-500"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-yellow-400 mb-1">3. 幾點？ (Time)</label>
+          <textarea id="optTime" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 outline-none focus:border-amber-500"></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-emerald-400 mb-1">4. 在哪裡見？ (Where)</label>
+          <textarea id="optWhere" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 outline-none focus:border-amber-500"></textarea>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-sky-400 mb-1">5. 要做什麼？ (What to do)</label>
+          <textarea id="optWhat" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 outline-none focus:border-amber-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center pt-2">
+        <button id="resetDefaultOptBtn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition">
+          回復預設選項
+        </button>
+        <button id="saveOptBtn" class="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-bold rounded-xl transition">
+          儲存選項
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast / Message Modal Overlay (Replaces alert/confirm) -->
+  <div id="toastBox" class="hidden fixed bottom-6 right-6 z-50 bg-slate-800 border border-amber-500/50 text-slate-100 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 transition-all">
+    <i id="toastIcon" class="fa-solid fa-circle-info text-amber-400 text-lg"></i>
+    <span id="toastMsg" class="text-sm font-medium">提示訊息</span>
+  </div>
+
+  <!-- Custom Dialog Confirm Modal -->
+  <div id="confirmModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full space-y-4 text-center">
+      <i class="fa-solid fa-circle-question text-amber-400 text-3xl"></i>
+      <h4 id="confirmText" class="text-base font-bold text-slate-100">確定執行此操作？</h4>
+      <div class="flex justify-center gap-3 pt-2">
+        <button id="confirmCancelBtn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition">取消</button>
+        <button id="confirmOkBtn" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Default Slot Options
+    const DEFAULT_REEL_DATA = [
+      // 0: 約誰？
+      ["小明", "媽媽", "班長", "隔壁老王", "導師", "小美", "英文老師", "狗狗阿黃"],
+      // 1: 哪一天？
+      ["星期一", "星期三", "星期六", "禮拜天", "下週五", "明天", "後天"],
+      // 2: 幾點？
+      ["早上8點", "中午12點", "下午2點半", "晚上7點", "傍晚5點", "上午10點"],
+      // 3: 在哪裡見？
+      ["捷運站", "大巨蛋", "學校圖書館", "公園沙坑", "便利商店", "麥當勞", "夜市", "電影院"],
+      // 4: 要做什麼？
+      ["看棒球", "吃火鍋", "寫作業", "溜滑板", "喝珍珠奶茶", "參加讀書會", "打羽毛球", "看電影"]
+    ];
+
+    let reelData = JSON.parse(localStorage.getItem('slot_reel_data')) || DEFAULT_REEL_DATA;
+
+    // App Statistics State
+    let stats = JSON.parse(localStorage.getItem('slot_speaking_stats')) || {
+      totalPlays: 0,
+      highAccuracyCount: 0,
+      totalTimeSeconds: 0
+    };
+
+    // Current Round State
+    let currentSelected = ["", "", "", "", ""];
+    let targetSentence = "";
+    let isSpinning = false;
+    let roundStartTime = null;
+    let singleTurnSeconds = null;
+    let soundEnabled = true;
+    let hintRevealed = false;
+
+    // UI Toast Notification helper
+    function showToast(message, iconClass = 'fa-solid fa-circle-info text-amber-400') {
+      const toastBox = document.getElementById('toastBox');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.innerText = message;
+      toastIcon.className = iconClass;
+      toastBox.classList.remove('hidden');
+
+      setTimeout(() => {
+        toastBox.classList.add('hidden');
+      }, 3000);
+    }
+
+    // UI Custom Confirm Modal helper
+    function showConfirm(message, onConfirm) {
+      const confirmModal = document.getElementById('confirmModal');
+      const confirmText = document.getElementById('confirmText');
+      const confirmOkBtn = document.getElementById('confirmOkBtn');
+      const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+
+      confirmText.innerText = message;
+      confirmModal.classList.remove('hidden');
+
+      const cleanup = () => {
+        confirmModal.classList.add('hidden');
+        confirmOkBtn.removeEventListener('click', okHandler);
+        confirmCancelBtn.removeEventListener('click', cancelHandler);
+      };
+
+      const okHandler = () => {
+        cleanup();
+        onConfirm();
+      };
+
+      const cancelHandler = () => {
+        cleanup();
+      };
+
+      confirmOkBtn.addEventListener('click', okHandler);
+      confirmCancelBtn.addEventListener('click', cancelHandler);
+    }
+
+    // Web Audio Sound Synthesizer Engine
+    let audioCtx = null;
+    function playAudioTone(freq, duration, type = 'sine') {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.error("Audio playback error", e);
+      }
+    }
+
+    function playSpinTickSound() {
+      playAudioTone(300 + Math.random() * 200, 0.05, 'square');
+    }
+
+    function playWinSound() {
+      if (!soundEnabled) return;
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      notes.forEach((freq, idx) => {
+        setTimeout(() => playAudioTone(freq, 0.2, 'triangle'), idx * 120);
+      });
+    }
+
+    // DOM Elements
+    const reelStrips = [0, 1, 2, 3, 4].map(i => document.getElementById(`reel-${i}`));
+    const spinBtn = document.getElementById('spinBtn');
+    const leverContainer = document.getElementById('leverContainer');
+    const targetSentenceDisplay = document.getElementById('targetSentenceDisplay');
+    const elementsBadgeContainer = document.getElementById('elementsBadgeContainer');
+    const hintBtn = document.getElementById('hintBtn');
+    const micBtn = document.getElementById('micBtn');
+    const speechStatus = document.getElementById('speechStatus');
+    const userInputText = document.getElementById('userInputText');
+    const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+    const readSentenceBtn = document.getElementById('readSentenceBtn');
+    const clearTextBtn = document.getElementById('clearTextBtn');
+    const recordingRing = document.getElementById('recordingRing');
+    
+    // Result DOMs
+    const resultCard = document.getElementById('resultCard');
+    const scoreBadge = document.getElementById('scoreBadge');
+    const scoreBarInner = document.getElementById('scoreBarInner');
+    const feedbackDetail = document.getElementById('feedbackDetail');
+    const nextRoundBtn = document.getElementById('nextRoundBtn');
+
+    // Stats DOMs
+    const statTotalPlays = document.getElementById('statTotalPlays');
+    const statHighAccuracyCount = document.getElementById('statHighAccuracyCount');
+    const statTotalTime = document.getElementById('statTotalTime');
+    const statSingleTime = document.getElementById('statSingleTime');
+
+    // Render Initial Slot Strips
+    function initReels() {
+      reelStrips.forEach((strip, index) => {
+        const items = reelData[index];
+        let html = '';
+        for (let r = 0; r < 6; r++) {
+          items.forEach(item => {
+            html += `<div class="reel-item text-sm md:text-base text-amber-200 font-bold hover:text-amber-300 transition" data-word="${item}" title="點擊發音「${item}」">${item}</div>`;
+          });
+        }
+        strip.innerHTML = html;
+        strip.style.transform = `translateY(0px)`;
+      });
+    }
+
+    // Pronounce individual word or option
+    function speakWord(text) {
+      if (!text) return;
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-TW';
+        utterance.rate = 0.95;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Text-to-Speech (TTS) for full target sentence
+    function speakTargetSentence() {
+      if (!targetSentence) {
+        showToast('請先拉霸產生目標句子！');
+        return;
+      }
+      speakWord(targetSentence);
+    }
+
+    // Spin Machine Execution
+    function spinSlots() {
+      if (isSpinning) return;
+      isSpinning = true;
+      spinBtn.disabled = true;
+      spinBtn.classList.add('opacity-50');
+      micBtn.disabled = true;
+      micBtn.classList.remove('border-amber-400', 'text-amber-300', 'bg-amber-500/20');
+      micBtn.classList.add('border-slate-700', 'text-slate-500', 'bg-slate-800');
+      submitAnswerBtn.disabled = true;
+      
+      // Reset hint button state
+      hintRevealed = false;
+      hintBtn.disabled = true;
+      hintBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      hintBtn.innerHTML = `<i class="fa-solid fa-lightbulb"></i> 顯示句子提示`;
+
+      resultCard.classList.add('hidden');
+      userInputText.value = '';
+
+      // Lever Pull Animation
+      leverContainer.classList.add('lever-pulled');
+      setTimeout(() => leverContainer.classList.remove('lever-pulled'), 400);
+
+      playAudioTone(150, 0.2, 'sawtooth');
+
+      const itemHeight = 120;
+      const results = [];
+
+      reelStrips.forEach((strip, index) => {
+        const items = reelData[index];
+        const randomIndex = Math.floor(Math.random() * items.length);
+        results[index] = items[randomIndex];
+
+        const targetCycle = 4; 
+        const targetItemIndex = targetCycle * items.length + randomIndex;
+        const targetY = - (targetItemIndex * itemHeight);
+
+        const duration = 1800 + index * 400;
+
+        let ticks = 0;
+        const soundInterval = setInterval(() => {
+          ticks++;
+          playSpinTickSound();
+          if (ticks > duration / 100) clearInterval(soundInterval);
+        }, 80);
+
+        strip.style.transition = `transform ${duration}ms cubic-bezier(0.15, 0.85, 0.35, 1.05)`;
+        strip.style.transform = `translateY(${targetY}px)`;
+      });
+
+      // When all reels finish spinning
+      const totalDuration = 1800 + 4 * 400 + 100;
+      setTimeout(() => {
+        isSpinning = false;
+        spinBtn.disabled = false;
+        spinBtn.classList.remove('opacity-50');
+        currentSelected = results;
+        
+        // Formulate target sentence using 「約」 instead of 「跟」
+        // Standard sentence structure: 我 [哪一天] [幾點] 約 [約誰] 在 [在哪裡見] [要做什麼]。
+        const [who, day, time, where, what] = currentSelected;
+        targetSentence = `我${day}${time}約${who}在${where}${what}。`;
+
+        // Enable hint button
+        hintBtn.disabled = false;
+        hintBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+        // Update UI
+        renderTargetDisplay();
+        playWinSound();
+
+        // Enable Voice Microphone
+        micBtn.disabled = false;
+        micBtn.classList.remove('border-slate-700', 'text-slate-500', 'bg-slate-800', 'cursor-not-allowed');
+        micBtn.classList.add('border-amber-400', 'text-amber-300', 'bg-amber-500/20', 'hover:scale-105', 'cursor-pointer');
+        submitAnswerBtn.disabled = false;
+        speechStatus.innerText = '拉霸抽取完成！請挑戰念出包含此 5 項要素的完整句子。';
+
+        // Start round timing
+        roundStartTime = Date.now();
+      }, totalDuration);
+    }
+
+    function toggleHint() {
+      if (!targetSentence) return;
+      hintRevealed = !hintRevealed;
+      if (hintRevealed) {
+        hintBtn.innerHTML = `<i class="fa-solid fa-eye-slash"></i> 隱藏參考句型`;
+        targetSentenceDisplay.innerHTML = `<span class="text-amber-300 font-extrabold">${targetSentence}</span>`;
+      } else {
+        hintBtn.innerHTML = `<i class="fa-solid fa-lightbulb"></i> 顯示參考句型`;
+        targetSentenceDisplay.innerHTML = `<span class="text-slate-400 text-lg font-medium"><i class="fa-solid fa-lock text-amber-400 mr-1"></i> 參考句型已隱藏，請自由發揮語序唸出！（點擊提示按鈕可查看參考）</span>`;
+      }
+    }
+
+    function renderTargetDisplay() {
+      const colors = [
+        'border-red-500/40 text-red-300 bg-red-500/10 hover:bg-red-500/20',
+        'border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20',
+        'border-yellow-500/40 text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20',
+        'border-emerald-500/40 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20',
+        'border-sky-500/40 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20'
+      ];
+      const labels = ['約誰', '哪一天', '幾點', '在哪裡', '要做什麼'];
+
+      elementsBadgeContainer.innerHTML = currentSelected.map((item, i) => `
+        <button onclick="speakWord('${item}')" class="text-xs px-2.5 py-1.5 rounded-lg border ${colors[i]} font-bold transition transform active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm" title="點擊發音「${item}」">
+          <i class="fa-solid fa-volume-low text-[10px]"></i> ${labels[i]}: ${item}
+        </button>
+      `).join('');
+
+      if (hintRevealed) {
+        targetSentenceDisplay.innerText = targetSentence;
+      } else {
+        targetSentenceDisplay.innerHTML = `<span class="text-slate-400 text-lg font-medium"><i class="fa-solid fa-lock text-amber-400 mr-1"></i> 參考句型已隱藏，請自由發揮語序唸出！（點擊提示按鈕可查看參考）</span>`;
+      }
+    }
+
+    // Speech Recognition Setup
+    let recognition = null;
+    let isRecording = false;
+
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'zh-TW';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        isRecording = true;
+        recordingRing.classList.remove('hidden');
+        speechStatus.innerText = '🎙️ 正在聆聽中，請清晰朗讀句子...';
+        playAudioTone(600, 0.1, 'sine');
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        userInputText.value = transcript;
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        isRecording = false;
+        recordingRing.classList.add('hidden');
+        speechStatus.innerText = '錄音遭遇問題，請改用鍵盤輸入或重試。';
+      };
+
+      recognition.onend = () => {
+        isRecording = false;
+        recordingRing.classList.add('hidden');
+        speechStatus.innerText = '錄音結束！請點擊「送出並評分」。';
+        playAudioTone(400, 0.1, 'sine');
+      };
+    } else {
+      speechStatus.innerText = '您的瀏覽器不支援語音辨識，請直接使用鍵盤輸入答案。';
+    }
+
+    function toggleRecording() {
+      if (!targetSentence) {
+        showToast('請先點擊「啟動拉霸抽籤」產生題目！');
+        return;
+      }
+      if (!recognition) {
+        showToast('您的瀏覽器不支援 Web Speech API。請直接寫在輸入框內。');
+        return;
+      }
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        recognition.start();
+      }
+    }
+
+    // Sentence Evaluation Algorithm (Flexible Word Order)
+    function evaluateSentence(userText, targetStr, elements) {
+      if (!userText || userText.trim() === '') {
+        return { score: 0, matched: [], missing: elements, feedback: '尚未輸入任何內容！' };
+      }
+
+      const cleanUserText = userText.replace(/[，。！？\s]/g, '');
+
+      // Check key element presence (flexible word order)
+      const matched = [];
+      const missing = [];
+
+      elements.forEach(el => {
+        const cleanEl = el.replace(/[，。！？\s]/g, '');
+        if (cleanUserText.includes(cleanEl)) {
+          matched.push(el);
+        } else {
+          missing.push(el);
+        }
+      });
+
+      // Flexible word order scoring: Each element accounts for 20% score (total 100%)
+      const totalScore = Math.round((matched.length / elements.length) * 100);
+
+      return {
+        score: totalScore,
+        matched: matched,
+        missing: missing
+      };
+    }
+
+    // Handle Answer Submission
+    function submitAnswer() {
+      if (!targetSentence) return;
+      const userText = userInputText.value.trim();
+      if (!userText) {
+        showToast('請先說出句子或輸入文字！');
+        return;
+      }
+
+      // Calculate Round Time
+      if (roundStartTime) {
+        singleTurnSeconds = Math.max(1, Math.round((Date.now() - roundStartTime) / 1000));
+        statSingleTime.innerText = `${singleTurnSeconds} `;
+      }
+
+      // Evaluate accuracy
+      const evalResult = evaluateSentence(userText, targetSentence, currentSelected);
+      const score = evalResult.score;
+
+      // Update Statistics State
+      stats.totalPlays++;
+      if (score >= 90) {
+        stats.highAccuracyCount++;
+        // Confetti celebration for >90% score
+        if (typeof confetti === 'function') {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+        }
+      }
+      saveStats();
+
+      // Render Result UI
+      resultCard.classList.remove('hidden');
+      scoreBadge.innerText = `${score}%`;
+      scoreBarInner.style.width = `${score}%`;
+
+      if (score >= 90) {
+        scoreBadge.className = "text-2xl font-black px-4 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
+      } else if (score >= 70) {
+        scoreBadge.className = "text-2xl font-black px-4 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40";
+      } else {
+        scoreBadge.className = "text-2xl font-black px-4 py-1 rounded-xl bg-red-500/20 text-red-400 border border-red-500/40";
+      }
+
+      // Build Comparison Feedback Details
+      feedbackDetail.innerHTML = `
+        <div class="space-y-2">
+          <p class="font-bold text-slate-200">🎯 參考建議句：<span class="text-amber-300">${targetSentence}</span> <span class="text-xs text-slate-400 font-normal">(中文語序彈性，不限於此順序)</span></p>
+          <p class="font-bold text-slate-200">🗣️ 你的發音/答案：<span class="text-sky-300">${userText}</span></p>
+        </div>
+        <hr class="border-slate-800" />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          <div class="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+            <span class="font-bold text-emerald-400">✅ 成功包含要素 (${evalResult.matched.length}/5)：</span>
+            <p class="mt-1 text-slate-300">${evalResult.matched.join('、') || '無'}</p>
+          </div>
+          <div class="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+            <span class="font-bold text-red-400">❌ 缺失或未辨識要素：</span>
+            <p class="mt-1 text-slate-300">${evalResult.missing.join('、') || '無 (5個要素全數包含！)'}</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 italic pt-1">
+          💡 ${score >= 90 ? '太棒了！你成功唸出了全部 5 個要素！中文語序很彈性，只要包含要素且表達清楚就是優良句子！' : score >= 70 ? '很不錯！包含大部分要素。順序可以自由發揮，記得把沒唸到的要素補齊即可！' : '再試一次！記得要把五個拉霸要素都唸出來，語序可以自由調整喔！'}
+        </p>
+      `;
+
+      // Smooth scroll to result
+      resultCard.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Save & Update Dashboard Statistics
+    function saveStats() {
+      localStorage.setItem('slot_speaking_stats', JSON.stringify(stats));
+      renderStats();
+    }
+
+    function renderStats() {
+      statTotalPlays.innerText = stats.totalPlays;
+      statHighAccuracyCount.innerText = stats.highAccuracyCount;
+      
+      const mins = Math.floor(stats.totalTimeSeconds / 60).toString().padStart(2, '0');
+      const secs = (stats.totalTimeSeconds % 60).toString().padStart(2, '0');
+      statTotalTime.innerText = `${mins}:${secs}`;
+    }
+
+    // Background Timer for Total Usage Time
+    setInterval(() => {
+      stats.totalTimeSeconds++;
+      if (stats.totalTimeSeconds % 5 === 0) {
+        saveStats();
+      } else {
+        renderStats();
+      }
+    }, 1000);
+
+    // Custom Options Modal Handlers
+    const customModal = document.getElementById('customModal');
+    const customOptionsBtn = document.getElementById('customOptionsBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const saveOptBtn = document.getElementById('saveOptBtn');
+    const resetDefaultOptBtn = document.getElementById('resetDefaultOptBtn');
+
+    const optWho = document.getElementById('optWho');
+    const optDay = document.getElementById('optDay');
+    const optTime = document.getElementById('optTime');
+    const optWhere = document.getElementById('optWhere');
+    const optWhat = document.getElementById('optWhat');
+
+    function openCustomModal() {
+      optWho.value = reelData[0].join('\n');
+      optDay.value = reelData[1].join('\n');
+      optTime.value = reelData[2].join('\n');
+      optWhere.value = reelData[3].join('\n');
+      optWhat.value = reelData[4].join('\n');
+      customModal.classList.remove('hidden');
+    }
+
+    function closeCustomModal() {
+      customModal.classList.add('hidden');
+    }
+
+    function saveCustomOptions() {
+      const parseLines = (val) => val.split('\n').map(s => s.trim()).filter(Boolean);
+      const new0 = parseLines(optWho.value);
+      const new1 = parseLines(optDay.value);
+      const new2 = parseLines(optTime.value);
+      const new3 = parseLines(optWhere.value);
+      const new4 = parseLines(optWhat.value);
+
+      if (!new0.length || !new1.length || !new2.length || !new3.length || !new4.length) {
+        showToast('每一欄至少要有一個選項！');
+        return;
+      }
+
+      reelData = [new0, new1, new2, new3, new4];
+      localStorage.setItem('slot_reel_data', JSON.stringify(reelData));
+      initReels();
+      closeCustomModal();
+      showToast('自訂拉霸選項已成功儲存！', 'fa-solid fa-circle-check text-emerald-400');
+    }
+
+    // Event Listeners Initialization
+    window.onload = () => {
+      initReels();
+      renderStats();
+
+      // Spin triggers
+      spinBtn.addEventListener('click', spinSlots);
+      leverContainer.addEventListener('click', spinSlots);
+      hintBtn.addEventListener('click', toggleHint);
+
+      // Audio & Speech triggers
+      micBtn.addEventListener('click', toggleRecording);
+      readSentenceBtn.addEventListener('click', speakTargetSentence);
+      submitAnswerBtn.addEventListener('click', submitAnswer);
+      clearTextBtn.addEventListener('click', () => userInputText.value = '');
+      nextRoundBtn.addEventListener('click', () => {
+        spinSlots();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      // Sound toggle
+      document.getElementById('soundToggleBtn').addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        document.getElementById('soundIcon').className = soundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+      });
+
+      // Custom options modal events
+      customOptionsBtn.addEventListener('click', openCustomModal);
+      closeModalBtn.addEventListener('click', closeCustomModal);
+      saveOptBtn.addEventListener('click', saveCustomOptions);
+      resetDefaultOptBtn.addEventListener('click', () => {
+        showConfirm('確定要恢復為預設選項嗎？', () => {
+          reelData = DEFAULT_REEL_DATA;
+          localStorage.removeItem('slot_reel_data');
+          initReels();
+          closeCustomModal();
+          showToast('已回復為預設選項！');
+        });
+      });
+
+      // Reel Item Click Pronunciation Event
+      document.querySelectorAll('.reel-window').forEach(reelWin => {
+        reelWin.addEventListener('click', (e) => {
+          const item = e.target.closest('.reel-item');
+          if (item && item.dataset.word && !isSpinning) {
+            speakWord(item.dataset.word);
+          }
+        });
+      });
+    };
+  </script>
+</body>
+</html>
